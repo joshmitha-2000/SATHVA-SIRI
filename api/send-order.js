@@ -51,6 +51,6 @@ export default async function handler(req, res) {
     res.status(200).json({ ok: true });
   } catch (err) {
     console.error("Send order error:", err);
-    res.status(500).json({ error: "Failed to send email" });
+    res.status(500).json({ error: "Failed to send email", detail: err.message });
   }
 }
