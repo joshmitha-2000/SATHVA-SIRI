@@ -99,7 +99,7 @@ export default function SathvaSiri() {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutItems, setCheckoutItems] = useState(null); // null = whole cart
-  const [form, setForm] = useState({ name: "", phone: "", address: "" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "" });
   const [placed, setPlaced] = useState(false);
   const [mailtoLink, setMailtoLink] = useState("");
   const [orderText, setOrderText] = useState("");
@@ -201,23 +201,26 @@ export default function SathvaSiri() {
 
   async function submitOrder(e) {
     e.preventDefault();
-    if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) return;
+    if (!form.name.trim() || form.phone.length !== 10 || !form.email.trim() || !form.address.trim()) return;
 
     setSending(true);
     setSendError("");
 
     try {
-      const res = await fetch("/api/send-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          phone: form.phone,
-          address: form.address,
-          items: itemsForCheckout,
-          total: checkoutTotal,
-        }),
-      });
+  const res = await fetch("http://localhost:3000/api/send-order", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: form.name,
+      phone: form.phone,
+      email: form.email,
+      address: form.address,
+      items: itemsForCheckout,
+      total: checkoutTotal,
+    }),
+  });
 
       if (!res.ok) throw new Error("Request failed");
 
@@ -234,6 +237,7 @@ export default function SathvaSiri() {
         `New order from Sathva Siri website\n\n` +
         `Customer name: ${form.name}\n` +
         `Phone: ${form.phone}\n` +
+        `Email: ${form.email}\n` +
         `Delivery address: ${form.address}\n\n` +
         `Order items:\n${lines}\n\n` +
         `Total: Rs. ${checkoutTotal}\n`;
@@ -613,8 +617,16 @@ export default function SathvaSiri() {
                     style={{ borderColor: t.border, color: t.text }}
                   />
                   <input
+                    type="tel" inputMode="numeric" maxLength={10}
                     required placeholder="Phone number" value={form.phone}
-                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+                    className="w-full px-3 py-2.5 rounded-lg border text-sm bg-transparent"
+                    style={{ borderColor: t.border, color: t.text }}
+                  />
+                  <input
+                    type="email"
+                    required placeholder="Email address" value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                     className="w-full px-3 py-2.5 rounded-lg border text-sm bg-transparent"
                     style={{ borderColor: t.border, color: t.text }}
                   />
