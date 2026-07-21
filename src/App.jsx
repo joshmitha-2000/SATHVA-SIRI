@@ -104,6 +104,8 @@ export default function SathvaSiri() {
   const [mailtoLink, setMailtoLink] = useState("");
   const [orderText, setOrderText] = useState("");
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
   const [viewProduct, setViewProduct] = useState(null);
   const [slide, setSlide] = useState(0);
 
@@ -183,63 +185,70 @@ export default function SathvaSiri() {
   function buyNow(product) {
     setCheckoutItems([{ ...product, qty: 1 }]);
     setPlaced(false);
+    setSendError("");
     setCheckoutOpen(true);
   }
   function checkoutCart() {
     if (cartLines.length === 0) return;
     setCheckoutItems(null); // use live cart
     setPlaced(false);
+    setSendError("");
     setCheckoutOpen(true);
   }
 
   const itemsForCheckout = checkoutItems ?? cartLines;
   const checkoutTotal = itemsForCheckout.reduce((s, l) => s + l.qty * l.price, 0);
 
-  function submitOrder(e) {
+  async function submitOrder(e) {
     e.preventDefault();
     if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) return;
 
-    const lines = itemsForCheckout
-      .map((l) => `- ${l.name} (${l.unit}) x ${l.qty} = Rs. ${l.qty * l.price}`)
-      .join("\n");
+    setSending(true);
+    setSendError("");
 
-    const body =
-      `New order from Sathva Siri website\n\n` +
-      `Customer name: ${form.name}\n` +
-      `Phone: ${form.phone}\n` +
-      `Delivery address: ${form.address}\n\n` +
-      `Order items:\n${lines}\n\n` +
-      `Total: Rs. ${checkoutTotal}\n`;
-
-    const subject = "New Order - Sathva Siri";
-    const mailto = `mailto:${ORDER_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-    setMailtoLink(mailto);
-    setOrderText(`To: ${ORDER_EMAIL}\nSubject: ${subject}\n\n${body}`);
-    setCopied(false);
-
-    // Preview sandboxes usually block a frame from navigating itself
-    // (window.location.href), but opening a new browsing context is
-    // normally still allowed — so we try that route for the auto-attempt.
-    // Either way, the confirmation screen gives a direct link and a
-    // copy-to-clipboard fallback that always works.
     try {
-      const win = window.open(mailto, "_blank", "noopener,noreferrer");
-      if (!win) {
-        const a = document.createElement("a");
-        a.href = mailto;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-    } catch (err) {
-      // ignore — confirmation screen still offers a working link + copy button
-    }
+      const res = await fetch("/api/send-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone,
+          address: form.address,
+          items: itemsForCheckout,
+          total: checkoutTotal,
+        }),
+      });
 
-    setPlaced(true);
-    if (checkoutItems === null) setCart({});
+      if (!res.ok) throw new Error("Request failed");
+
+      setPlaced(true);
+      if (checkoutItems === null) setCart({});
+    } catch (err) {
+      console.error("Order send failed:", err);
+      // Fall back to a mailto link + copyable text so the order is never lost
+      const lines = itemsForCheckout
+        .map((l) => `- ${l.name} (${l.unit}) x ${l.qty} = Rs. ${l.qty * l.price}`)
+        .join("\n");
+
+      const body =
+        `New order from Sathva Siri website\n\n` +
+        `Customer name: ${form.name}\n` +
+        `Phone: ${form.phone}\n` +
+        `Delivery address: ${form.address}\n\n` +
+        `Order items:\n${lines}\n\n` +
+        `Total: Rs. ${checkoutTotal}\n`;
+
+      const subject = "New Order - Sathva Siri";
+      const mailto = `mailto:${ORDER_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+      setMailtoLink(mailto);
+      setOrderText(`To: ${ORDER_EMAIL}\nSubject: ${subject}\n\n${body}`);
+      setCopied(false);
+      setSendError("We couldn't reach our order system automatically. Please use one of the options below to send us your order.");
+      setPlaced(true);
+    } finally {
+      setSending(false);
+    }
   }
 
   async function copyOrderDetails() {
@@ -583,7 +592,7 @@ export default function SathvaSiri() {
               <>
                 <h3 className="ss-serif text-xl mb-1">Complete your order</h3>
                 <p className="text-xs mb-4" style={{ color: t.textMuted }}>
-                  We'll open an email to our order desk with your details below.
+                  We'll send your order details to our team and reach out to confirm.
                 </p>
                 <div className="rounded-lg p-3 mb-4 text-sm space-y-1" style={{ background: t.surfaceAlt }}>
                   {itemsForCheckout.map((l) => (
@@ -615,8 +624,13 @@ export default function SathvaSiri() {
                     className="w-full px-3 py-2.5 rounded-lg border text-sm bg-transparent resize-none"
                     style={{ borderColor: t.border, color: t.text }}
                   />
-                  <button type="submit" className="w-full py-3 rounded-lg text-sm font-medium" style={{ background: t.gold, color: dark ? "#17130E" : "#fff" }}>
-                    Place order
+                  <button
+                    type="submit"
+                    disabled={sending}
+                    className="w-full py-3 rounded-lg text-sm font-medium disabled:opacity-60"
+                    style={{ background: t.gold, color: dark ? "#17130E" : "#fff" }}
+                  >
+                    {sending ? "Sending..." : "Place order"}
                   </button>
                 </form>
               </>
@@ -625,27 +639,32 @@ export default function SathvaSiri() {
                 <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: t.surfaceAlt, color: t.green }}>
                   <Check size={22} />
                 </div>
-                <h3 className="ss-serif text-xl mb-1">Order details ready</h3>
+                <h3 className="ss-serif text-xl mb-1">
+                  {sendError ? "Order details ready" : "Request sent!"}
+                </h3>
                 <p className="text-sm mb-4" style={{ color: t.textMuted }}>
-                  We tried to open your email app. If nothing opened, use one of the options
-                  below to reach us at <span className="font-medium">{ORDER_EMAIL}</span>.
+                  {sendError || "Your request has been sent — we'll reach out to you shortly to confirm your order."}
                 </p>
-                <a
-                  href={mailtoLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full py-3 rounded-lg text-sm font-medium mb-2"
-                  style={{ background: t.gold, color: dark ? "#17130E" : "#fff" }}
-                >
-                  Open email app
-                </a>
-                <button
-                  onClick={copyOrderDetails}
-                  className="w-full py-3 rounded-lg text-sm font-medium border mb-2"
-                  style={{ borderColor: t.border, color: t.text }}
-                >
-                  {copied ? "Copied! Paste it into an email" : "Copy order details"}
-                </button>
+                {sendError && (
+                  <>
+                    <a
+                      href={mailtoLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full py-3 rounded-lg text-sm font-medium mb-2"
+                      style={{ background: t.gold, color: dark ? "#17130E" : "#fff" }}
+                    >
+                      Open email app
+                    </a>
+                    <button
+                      onClick={copyOrderDetails}
+                      className="w-full py-3 rounded-lg text-sm font-medium border mb-2"
+                      style={{ borderColor: t.border, color: t.text }}
+                    >
+                      {copied ? "Copied! Paste it into an email" : "Copy order details"}
+                    </button>
+                  </>
+                )}
                 <button onClick={() => setCheckoutOpen(false)} className="w-full px-5 py-2.5 rounded-lg text-sm border" style={{ borderColor: t.border }}>
                   Close
                 </button>
