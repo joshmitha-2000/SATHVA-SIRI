@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 
 const ORDER_EMAIL =
-  process.env.ORDER_EMAIL || "djoshmithadevarakonda@gmail.com";
+  process.env.ORDER_EMAIL || "Srujanksgowda@gmail.com";
 
 function escapeHtml(str) {
   return String(str)
@@ -30,7 +30,9 @@ export default async function sendOrder(req, res) {
       !email ||
       !address ||
       !Array.isArray(items) ||
-      items.length === 0
+      items.length === 0 ||
+      total === undefined ||
+      total === null
     ) {
       return res.status(400).json({ error: "Missing order details" });
     }
@@ -156,12 +158,13 @@ Total: Rs. ${total}
       },
     });
 
-    // ✅ Send email — sent via our Gmail account, but reply-to is the customer's
-    // email so the team can just hit "Reply" to reach them directly.
+    // ✅ Send email — sent via our authenticated Gmail account (avoids
+    // SPF/DMARC rejection), but reply-to is the customer's email so the
+    // team can just hit "Reply" to reach them directly.
     await transporter.sendMail({
-      from: `Sathva Siri <${process.env.GMAIL_USER}>`,
+      from: `"${name} via Sathva Siri" <${process.env.GMAIL_USER}>`,
       to: ORDER_EMAIL,
-      replyTo: `${name} <${email}>`,
+      replyTo: `"${name}" <${email}>`,
       subject: `🛒 New Order from ${name}`,
       text,
       html,
