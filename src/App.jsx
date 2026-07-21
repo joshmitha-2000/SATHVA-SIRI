@@ -207,7 +207,7 @@ export default function SathvaSiri() {
     setSendError("");
 
     try {
-  const res = await fetch("http://localhost:3000/api/send-order", {
+  const res = await fetch('/api/send-order',  {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
